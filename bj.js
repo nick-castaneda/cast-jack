@@ -9,7 +9,10 @@ var prompt = require('prompt');
 var dealerCards = [];
 var myCards = [];
 var stratScore = 0;
-// var cash = 0;
+var cash = 100;
+// var turns = 0;
+var theCount = 0;
+var bet = 10;
 var deck;
 var numberOfDecks;
 
@@ -123,33 +126,65 @@ function shuffleCards(numOfDeck){
   return decksOfCards;
 }
 
+function dealerMove(){
+  let handValue = dealerCards[0].value + dealerCards[1].value;
+  let aceHand = false;
+  let cardString = "Dealer Cards: " + dealerCards[0].view + " " + dealerCards[1].view;
+
+  for (let i = 0; i < dealerCards.length; i++){
+    if (dealerCards[i].value == 1) { aceHandD = true; }
+  }
+  if (aceHand && handValue + 10 <= 21) { handValue = handValue + 10; }
+
+  // handle the hitting and shit
+  while (handValue < 17 || (handValue == 17 && aceHand)) {
+    let newCard = deck.pop();
+    if (newCard.value == 1) {
+      aceHand = true;
+      if (handValue + 11 > 21) { handValue += 1; }
+      else { handValue += 11; }
+    }
+    else { handValue += newCard.value; }
+    dealerCards.push(newCard);
+    cardString += " " + newCard.view;
+  }
+  return [handValue, cardString]
+}
+
 ////////////////////////////////////////////////////////////////////////
 //                              Gameflow                              //
 ////////////////////////////////////////////////////////////////////////
 
+// Starts a new hands
 function newHand(deck){
+  console.log("*************************");
   console.log("Dealing ...");
+
+  bet = 10;
+  cash -= 10;
   dealerCards = [];
   myCards = [];
   myCards.push(deck.pop());
   dealerCards.push(deck.pop());
   myCards.push(deck.pop());
   dealerCards.push(deck.pop());
-  console.log("Dealer cards: " + "* " + dealerCards[1].view);
-  console.log("My cards: " + myCards[0].view + " " + myCards[1].view);
 
+  console.log("Dealer cards: " + "* " + dealerCards[1].view);
+  console.log("Your cards: " + myCards[0].view + " " + myCards[1].view);
   prompt.get(moveSchema, function (err, result){
-    evaluateMove(result.move);
+    analyzeAndRunMove(result.move);
   });
 }
 
-function evaluateMove(move){
+function analyzeAndRunMove(move){
+  // Set up variables to analyze the hands
   let aceHandM = false;
   let handValueM = 0;
   let pairHandM = (myCards[0].value == myCards[1].value);
   let dealerCard = dealerCards[1].value;
   let correctAnswer;
 
+  // Loops through player cards
   for(let i = 0; i < myCards.length; i++){
     handValueM += myCards[i].value;
     if(myCards[i].value == 1){
@@ -157,10 +192,11 @@ function evaluateMove(move){
     }
   }
 
+  // Big if/else tree to analyze stategy
   // Small hands
-  if (handValueM == 2){ correctAnswer = "p" }
+  if (handValueM == 2) { correctAnswer = "p" }
   // Large hands
-  else if (handValueM > 18){ correctAnswer = "s" }
+  else if (handValueM > 18) { correctAnswer = "s" }
   // Pairs
   else if (pairHandM) {
     // Low dealer card
@@ -222,31 +258,118 @@ function evaluateMove(move){
     console.log("Bad move! Should have choosen " + correctAnswer);
     stratScore -= 1;
   }
+  console.log("*****")
+
+  // Runs move with the pre-move hand value, to help with execution
+  runMove(move, handValueM);
+}
+
+// Run move
+function runMove(move, handValue){
+  if(move == "h") {
+    let newCard = deck.pop();
+    myCards.push(newCard);
+    console.log("You receive a " + newCard.view);
+    if(newCard.value + handValue > 21){
+      console.log("Busted!");
+      playAgain();
+    } else {
+      let cardString = "Your cards: ";
+      for (let i = 0; i < myCards.length; i++){
+        cardString += " ";
+        cardString += myCards[i].view;
+      }
+      console.log("Dealer cards: " + "* " + dealerCards[1].view);
+      console.log(cardString);
+      prompt.get(moveSchema, function (err, result){
+        analyzeAndRunMove(result.move);
+      });
+    }
+  }
+  // Double down doubles the bet and hits
+  else if (move == "d" || move == "ds") {
+    bet *= 2;
+    cash -= 10;
+    let newCard = deck.pop();
+    myCards.push(newCard);
+    console.log("You receive a " + newCard.view);
+
+    if(newCard.value + handValue > 21){
+      console.log("Busted!");
+      playAgain();
+    } else { checkWinner(); }
+  }
+  // Can't do splits yet
+  else if (move == "p") {
+    console.log("Can't split yet");
+  } else if (move == "su") {
+    cash += 5;
+    playAgain();
+  } else {
+    checkWinner();
+  }
+}
+
+// Function to check winner
+function checkWinner(){
+  // Variables for checking winner
+  let dealer = dealerMove();
+  let handValueD = dealer[0];
+  let cardStringD = dealer[1];
+  let handValueM = 0;
+  let aceHandM = false;
+  let cardStringM = "Your cards: ";
+
+  // Loop through my cards to set variables, then deal with the aces
+  for (let i = 0; i < myCards.length; i++){
+    handValueM += myCards[i].value;
+    cardStringM += " " + myCards[i].view;
+    if (myCards[i].value == 1) { aceHandM = true; }
+  }
+  if (aceHandM && handValueM + 10 <= 21) { handValueM = handValueM + 10; }
+
+  // Read Cards
+  console.log(cardStringD);
+  console.log(cardStringM);
+
+  //Evaluate
+  if (handValueD > 21) {
+    console.log("Dealer Busts!");
+    cash += bet * 2;
+  } else if (handValueM > handValueD){
+    console.log("You won!");
+    cash += bet * 2;
+  } else if (handValueM == handValueD) {
+    console.log("Push");
+    cash += bet;
+  } else {
+    console.log("You lost!");
+  }
 
   playAgain();
 }
 
-
-// Function to calculate winner
-
+//
 function playAgain(){
-  if(deck.length >= 10){
-    console.log("Play again?")
+  if(deck.length >= 10 && cash >= 10){
+    console.log("*************************");
+    console.log("You have $" + cash);
+    console.log("Play again?");
     prompt.get(playAgainSchema, function (err, result) {
-      if (result.playAgain == "y"){
-        newHand(deck);
-      } else {
-        console.log("Your score is: " + stratScore);
-      }
+      if (result.playAgain == "y"){ newHand(deck); }
+      else { console.log("Your score is: " + stratScore); }
     });
   } else {
+    console.log("*************************");
     console.log("Your score is: " + stratScore);
   }
 }
 
 ////////////////////////////////////////////////////////////////////////
+console.log("*************************");
+console.log("* Welcome to Cast-Jack! *");
+console.log("*************************");
 
-console.log("Welcome to blackjack!");
 prompt.start();
 prompt.get(numOfDecksSchema, function (err, result) {
   deck = shuffleCards(parseInt(result.numberOfDecks));
